@@ -1,0 +1,5 @@
+cluster.name: elastic-stack-single-node-cluster
+discovery.type: single-node
+network.host: 0.0.0.0
+node.name: "elasticsearch-demo-single-node"
+xpack.security.enabled: false

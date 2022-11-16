@@ -1,0 +1,49 @@
+# The number of entries write at a time
+etl_batch_size = 1000
+
+[sql_db]
+default_schema = "content"
+key_field_name = "id"
+query_entries_limit = 10000
+
+[[bindings_elastic_to_sql]]
+elastic_index = "movies"
+mapping_file = "es_movies.json"
+
+[bindings_elastic_to_sql.table]
+# schema = "default"
+# key_field_name = "new_id"
+name = "film_work"
+alias = "fw"
+fields = ["id", "title", "description", "rating", "modified"]
+# Aliases for source DB in destanation DB
+aliases.rating = "imdb_rating"
+field_actual_state_name = "modified"
+
+[[bindings_elastic_to_sql.table.children]]
+name = "genre_film_work"
+alias = "gfw"
+group = "genre"
+join.film_work_id = "id"
+
+[[bindings_elastic_to_sql.table.children.children]]
+name = "genre"
+alias = "gr"
+join.id = "genre_id"
+fields = ["name"]
+field_actual_state_name = "modified"
+
+[[bindings_elastic_to_sql.table.children]]
+name = "person_film_work"
+alias = "pfw"
+group = "persons"
+fields = ["role"]
+join.film_work_id = "id"
+
+[[bindings_elastic_to_sql.table.children.children]]
+name = "person"
+alias = "pn"
+join.id = "person_id"
+fields = ["id", "full_name", "modified"]
+aliases.full_name = "name"
+field_actual_state_name = "modified"

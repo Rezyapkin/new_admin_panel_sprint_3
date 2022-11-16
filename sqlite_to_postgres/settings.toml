@@ -1,0 +1,50 @@
+# Schema PostresSQL for destanation tables.
+schema_dest_db = "content"
+
+# The number of table entries read at a time
+count_entries = 1000
+
+# Default key field name
+key_field_name = "id"
+
+# Tables for copy from SqLite DB to PostgresSQL DB.
+[[tables]]
+name = "film_work"
+fields = ["id", "title", "description", "creation_date", "rating", "type", "created_at", "updated_at"]
+model_name = "FilmWork"
+# Aliases for source DB in destanation DB
+aliases.created_at = "created"
+aliases.updated_at = "modified"
+
+[[tables]]
+name = "genre"
+fields = ["id", "name", "description", "created_at", "updated_at"]
+model_name = "Genre"
+# Aliases for source DB in destanation DB
+aliases.created_at = "created"
+aliases.updated_at = "modified"
+
+[[tables]]
+name = "person"
+fields = ["id", "full_name", "created_at", "updated_at"]
+model_name = "Person"
+# Aliases for source DB in destanation DB
+aliases.created_at = "created"
+aliases.updated_at = "modified"
+
+[[tables]]
+name = "genre_film_work"
+fields = ["id", "genre_id", "film_work_id", "created_at"]
+model_name = "GenreFilmWork"
+# Aliases for source DB in destanation DB
+aliases.created_at = "created"
+# Use for ON CONFLICT
+key_fields = ["film_work_id", "genre_id"]
+
+[[tables]]
+name = "person_film_work"
+fields = ["id", "person_id", "film_work_id", "role", "created_at"]
+model_name = "PersonFilmWork"
+# Aliases for source DB in destanation DB
+aliases.created_at = "created"
+key_fields = ["film_work_id", "person_id", "role"]
