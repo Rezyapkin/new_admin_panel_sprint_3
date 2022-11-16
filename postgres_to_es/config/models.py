@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, ForwardRef
 
-from pydantic import BaseSettings, BaseModel, Field, PostgresDsn, validator
+from pydantic import BaseSettings, BaseModel, Field, PostgresDsn, RedisDsn, validator
 
 
 ExchangeTableSettings = ForwardRef("ExchangeTableSettings")
@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     postgres_password: str = Field(..., env="sql_password")
     postgres_db: str = Field(..., env="sql_database")
     postgres_dsn: PostgresDsn | None = None
+    redis_host: str
+    redis_port: str
+    redis_password: str
 
     @validator("postgres_dsn", pre=True)
     def assemble_db_connection(cls, v: str | None, values: Dict[str, Any]) -> Any:

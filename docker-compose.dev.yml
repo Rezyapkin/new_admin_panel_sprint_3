@@ -50,7 +50,20 @@ services:
     ports:
       - ${ES_PORT}:9200
 
+  redis:
+    build: ./redis
+    restart: always
+    volumes:
+      - data_rds:/data
+    env_file:
+      - ./.env
+    ports:
+      - ${REDIS_PORT}: ${REDIS_PORT}
+    logging:
+      driver: none
+
 volumes:
   data_es:
+  data_rds:
   postgres_data:
   static:
