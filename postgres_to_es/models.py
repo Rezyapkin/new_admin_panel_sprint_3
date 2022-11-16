@@ -5,10 +5,6 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
-class ModifiedTimeStampedMixin(BaseModel):
-    modified: datetime = Field(alias="updated_at")
-
-
 class UUIDMixin(BaseModel):
     id: UUID
 
@@ -24,12 +20,12 @@ class PersonRoles(str, Enum):
     writer = "writer"
 
 
-class FilmWork(UUIDMixin, ModifiedTimeStampedMixin):
+class FilmWork(UUIDMixin):
     title: str = Field(max_length=255)
-    imdb_rating: Optional[float] = Field(None, gte=0, lte=100, alias="rating")
+    imdb_rating: Optional[float] = Field(None, gte=0, lte=100)
     genre: List[str]
-    description: Optional[str] = None
-    director: List[str]
-    actors_names: List[str]
-    writers_names: List[str]
-    actors: List[Person]
+    description: Optional[str] = ""
+    director: List[str] = []
+    actors_names: List[str] = []
+    writers_names: List[str] = []
+    actors: List[Person] = []

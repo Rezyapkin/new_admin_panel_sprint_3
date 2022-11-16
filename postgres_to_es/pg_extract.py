@@ -9,6 +9,7 @@ from config.models import ExchangeTableSettings, SQLDBSettings
 class QueryBuildMixin:
     TRACKED_FIELD_NAME = "_tracked_field"
     TRACKED_TABLE_NAME = "_tracked_table"
+    WHERE_COMMENT = "IS NOT NULL /*CHANGE*/"
 
     def __init__(self, source: ExchangeTableSettings, db_settings: SQLDBSettings | None = None):
         self.source = source
@@ -26,7 +27,7 @@ class QueryBuildMixin:
 
     @staticmethod
     def _get_field_alias(table: ExchangeTableSettings, field: str):
-        table_alias = PostgresSQLLoader._get_table_alias(table)
+        table_alias = PostgresSQLExtract._get_table_alias(table)
         return table.aliases.get(field, "{0}__{1}".format(table_alias, field))
 
     def _get_full_table_name(self, table: ExchangeTableSettings) -> str:
@@ -119,7 +120,7 @@ class QueryBuildMixin:
                     query_str_list.append("{0} {1}".format(table_str, table_join[0]))
                 parent_table = table
 
-            query_str_list.append("  WHERE {0} > %s \n  ORDER BY {0}".format(field_full_name))
+            query_str_list.append("  WHERE {0} {1}\n  ORDER BY {0}".format(field_full_name, self.WHERE_COMMENT))
             if self.query_limit is not None:
                 query_str_list.append("  LIMIT {} OFFSET %s".format(self.query_limit))
             query_str_list.append("  ) AS \"{0}\" ON {1} = \"{0}\".\"id\"".format(self.TRACKED_TABLE_NAME,
@@ -168,7 +169,7 @@ class QueryBuildMixin:
         return sql_text
 
 
-class PostgresSQLLoader(QueryBuildMixin):
+class PostgresSQLExtract(QueryBuildMixin):
     def __init__(self, conn: _connection, source: ExchangeTableSettings, db_settings: SQLDBSettings | None = None,
                  batch_size: int = 1000):
         self.conn = conn
@@ -191,15 +192,20 @@ class PostgresSQLLoader(QueryBuildMixin):
             else:
                 state_value = record[self.TRACKED_FIELD_NAME]
                 break
-
         return state_value, offset
 
-    def load_data(self, tracked_field: str, tracked_field_state_value: Any,
-                  tracked_field_state_offset: int = 0) -> dict:
+    def extract_data(self, tracked_field: str, tracked_field_state_value: Any,
+                     tracked_field_state_offset: int = 0) -> Tuple[list[DictRow], str, str]:
         sql_text = self._get_query_for_tracked_field(tracked_field)
-        print(sql_text)
+        if tracked_field_state_value:
+            sql_text = sql_text.replace(self.WHERE_COMMENT, "> %s ")
+            execute_params = [tracked_field_state_value, tracked_field_state_offset]
+        else:
+            execute_params = [tracked_field_state_offset]
+
         cur = self.conn.cursor(cursor_factory=DictCursor)
-        cur.execute(sql_text, (tracked_field_state_value, tracked_field_state_offset))
+        print(sql_text)
+        cur.execute(sql_text, execute_params)
         while data := cur.fetchmany(size=self.batch_size):
             if len(data) == 0:
                 tracked_field_state = (tracked_field_state_value, tracked_field_state_offset)

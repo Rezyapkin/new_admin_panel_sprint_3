@@ -30,6 +30,7 @@ class SQLDBSettings(BaseModel):
 
 class EtlExchangeSettings(BaseModel):
     elastic_index: str
+    transform_class: str
     mapping_file: str | None = None
     table: ExchangeTableSettings
 
@@ -41,6 +42,8 @@ class EtlSettings(BaseModel):
 
 
 class Settings(BaseSettings):
+    db_timeout: int = 3
+    pause_between_repeated_requests: int = 1
     etl_settings: EtlSettings
     postgres_server: str = Field(..., env="sql_host")
     postgres_user: str = Field(..., env="sql_user")
@@ -49,6 +52,7 @@ class Settings(BaseSettings):
     postgres_dsn: PostgresDsn | None = None
     redis_host: str
     redis_port: str
+    redis_etl_db: int = 0
     redis_password: str
 
     @validator("postgres_dsn", pre=True)

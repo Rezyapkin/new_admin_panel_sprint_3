@@ -2,6 +2,7 @@ import abc
 from typing import Any
 from redis import Redis
 
+from decorators import backoff
 
 class BaseStorage:
     @abc.abstractmethod
@@ -16,17 +17,19 @@ class BaseStorage:
 
 
 class RedisStorage(BaseStorage):
-    STORAGE_NAME = 'storage'
+    STORAGE_NAME = "storage"
 
     def __init__(self, redis_adapter: Redis, storage_name: str = STORAGE_NAME):
         self.redis_adapter = redis_adapter
         self.storage_name = storage_name
 
+    @backoff()
     def save_state(self, state: dict) -> None:
-        self.redis_adapter.set({self.storage_name: state})
+        self.redis_adapter.hset(self.storage_name, mapping=state)
 
+    @backoff()
     def retrieve_state(self) -> dict:
-        return self.redis_adapter.get(self.storage_name)
+        return self.redis_adapter.hgetall(self.storage_name)
 
 
 class State:
@@ -43,4 +46,7 @@ class State:
         self.storage.save_state({key: value})
 
     def get_state(self, key: str) -> Any:
-        return self.storage.retrieve_state().get(key)
+        value = self.storage.retrieve_state().get(key.encode())
+        if type(value) == bytes:
+            value = value.decode("utf-8")
+        return value

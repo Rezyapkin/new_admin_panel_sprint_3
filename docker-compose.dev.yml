@@ -51,16 +51,15 @@ services:
       - ${ES_PORT}:9200
 
   redis:
-    build: ./redis
+    image: redis:7-alpine
+    command: redis-server --save 20 1 --loglevel warning --port $REDIS_PORT --requirepass $REDIS_PASSWORD
     restart: always
     volumes:
       - data_rds:/data
     env_file:
       - ./.env
     ports:
-      - ${REDIS_PORT}: ${REDIS_PORT}
-    logging:
-      driver: none
+      - ${REDIS_PORT}:${REDIS_PORT}
 
 volumes:
   data_es:
