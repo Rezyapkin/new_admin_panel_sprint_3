@@ -54,9 +54,9 @@ class ProcessETL:
         self.pg_conn = postgres_db_connection(self.settings.postgres_dsn, self.settings.db_timeout)
 
     @repeat_request(RedisError)
-    def get_state(self, key) -> Any:
+    def get_state(self, key, default: Any | None = None) -> Any:
         """Retrieves the state from the storage."""
-        return self.state.get_state(key)
+        return self.state.get_state(key, default)
 
     @repeat_request(RedisError)
     def set_state(self, key, value) -> None:
