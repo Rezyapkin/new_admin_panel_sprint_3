@@ -42,7 +42,7 @@ class ProcessETL:
         """If the ElasticSearch index does not exist, create it from a json file."""
         elastic_conn = self.elastic_loader.get_elastic()
         if not elastic_conn.indices.exists(index=etl.elastic_index):
-            with open(Path.joinpath(Path(settings.config_dir), etl.mapping_file), "r") as fp:
+            with open(Path.joinpath(Path(self.settings.config_dir), etl.mapping_file), "r") as fp:
                 data = load(fp)
                 elastic_conn.indices.create(index=etl.elastic_index, **data)
 
@@ -127,4 +127,3 @@ class ProcessETL:
         while True:
             for etl in self.settings.etl_settings.bindings_elastic_to_sql:
                 self.extract_data().send(etl)
-
