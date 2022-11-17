@@ -120,7 +120,7 @@ class QueryBuildMixin:
             key_field = self._get_table_key_field_name(first_table)
             key_field_full_name = self._get_full_field_name(self._get_table_alias(first_table), key_field)
             query_str_list = [
-                "JOIN (\n  SELECT DISTINCT {0} AS \"id\", {1} AS \"{2}\"".format(key_field_full_name, field_full_name,
+                "JOIN (\n  SELECT {0} AS \"id\", MAX({1}) AS \"{2}\"".format(key_field_full_name, field_full_name,
                                                                                  self.TRACKED_FIELD_NAME),
             ]
             parent_table = None
@@ -133,19 +133,23 @@ class QueryBuildMixin:
                     query_str_list.append("{0} {1}".format(table_str, table_join[0]))
                 parent_table = table
 
-            query_str_list.append("  WHERE {0} {1}\n  ORDER BY {0}".format(field_full_name, self.WHERE_COMMENT))
-            if self.query_limit is not None:
-                query_str_list.append("  LIMIT {} OFFSET %s".format(self.query_limit))
-            query_str_list.append("  ) AS \"{0}\" ON {1} = \"{0}\".\"id\"".format(self.TRACKED_TABLE_NAME,
-                                                                                  key_field_full_name))
+            # A block that adds filtering of records in the child table if necessary.
             root_table = parent_tables[0]
+            where_start = ""
             if (compare_field_actual_for_child_queries is True and
                     current_table.compare_field_actual_with_parent_query is not False and
                     root_table.field_actual_state_name):
                 root_field = self._get_full_field_name(self._get_table_alias(root_table),
                                                        root_table.field_actual_state_name)
+                where_start = "{} < {} AND".format(root_field, field_full_name)
 
-                query_str_list[-1] = " AND ".join([query_str_list[-1], "{} < {}".format(root_field, field_full_name)])
+            query_str_list.append("  WHERE {0} {1} {2}\n  GROUP BY {3}\n  ORDER BY {4}".
+                                  format(where_start, field_full_name, self.WHERE_COMMENT,
+                                         key_field_full_name, self.TRACKED_FIELD_NAME))
+            if self.query_limit is not None:
+                query_str_list.append("  LIMIT {} OFFSET %s".format(self.query_limit))
+            query_str_list.append("  ) AS \"{0}\" ON {1} = \"{0}\".\"id\"".format(self.TRACKED_TABLE_NAME,
+                                                                                  key_field_full_name))
 
             result[field_full_name] = "\n".join(query_str_list)
 
@@ -187,12 +191,13 @@ class QueryBuildMixin:
             LEFT JOIN "content"."person_film_work" AS "pfw" ON ("fw"."id" = "pfw"."film_work_id")
             LEFT JOIN "content"."person" AS "pn" ON ("pfw"."person_id" = "pn"."id")
             JOIN (
-                SELECT DISTINCT "fw"."id" AS "id", pn.modified AS "_tracked_field"
+                SELECT "fw"."id" AS "id", MAX(pn.modified) AS "_tracked_field"
                 FROM "content"."film_work" AS "fw"
                 JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
                 JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
                 WHERE "fw"."modified" < pn.modified AND pn.modified > %s
-                ORDER BY pn.modified
+                GROUP BY "fw"."id"
+                ORDER BY _tracked_field
                 LIMIT 10000 OFFSET %s
             ) AS "_tracked_table" ON "fw"."id" = "_tracked_table"."id"
             GROUP BY
@@ -263,7 +268,7 @@ class PostgresSQLExtract(QueryBuildMixin):
     def extract_data(self, tracked_field: str, tracked_field_state_value: Any,
                      tracked_field_state_offset: int = 0) -> Tuple[list[DictRow], str, str]:
         """
-        Retrieves data from PostgreSQL.
+        Retrieves data from PostgresSQL.
 
         Args:
             tracked_field: The field that is used to track changes.
@@ -287,7 +292,7 @@ class PostgresSQLExtract(QueryBuildMixin):
         else:
             execute_params = [tracked_field_state_offset]
 
-        print(sql_text)
+        # print(sql_text)
         cur = self.conn.cursor(cursor_factory=DictCursor)
         cur.execute(sql_text, execute_params)
         while data := cur.fetchmany(size=self.batch_size):

@@ -134,12 +134,13 @@
             LEFT JOIN "content"."person_film_work" AS "pfw" ON ("fw"."id" = "pfw"."film_work_id")
             LEFT JOIN "content"."person" AS "pn" ON ("pfw"."person_id" = "pn"."id")
             JOIN (
-                SELECT DISTINCT "fw"."id" AS "id", pn.modified AS "_tracked_field"
+                SELECT "fw"."id" AS "id", MAX(pn.modified) AS "_tracked_field"
                 FROM "content"."film_work" AS "fw"
                 JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
                 JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
                 WHERE "fw"."modified" < pn.modified AND pn.modified > %s 
-                ORDER BY pn.modified
+                GROUP BY "fw"."id"
+                ORDER BY _tracked_field
                 LIMIT 10000 OFFSET %s
             ) AS "_tracked_table" ON "fw"."id" = "_tracked_table"."id"  
             GROUP BY
@@ -152,4 +153,4 @@
             LIMIT 10000
 ```
 
-P.S. Кода много получилось, не очень чительно, мне кажется. Буду благодарен комментариям)
+P.S. Кода много получилось, не очень читабельно, мне кажется. Буду благодарен комментариям)
