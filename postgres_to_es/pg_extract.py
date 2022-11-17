@@ -102,7 +102,7 @@ class QueryBuildMixin:
 
     def _get_tracked_fields_with_related_tables(self, current_table: ExchangeTableSettings,
                                                 parent_tables: List[ExchangeTableSettings] | None = None,
-                                                depth=0):
+                                                depth=0, compare_field_actual_for_child_queries: bool | None = None):
         """
         A recursive query that forms a list of fields, tables and relationships between
         them for further formation of an SQL query
@@ -120,8 +120,8 @@ class QueryBuildMixin:
             key_field = self._get_table_key_field_name(first_table)
             key_field_full_name = self._get_full_field_name(self._get_table_alias(first_table), key_field)
             query_str_list = [
-                "JOIN (\n  SELECT {0} AS \"id\", {1} AS \"{2}\"".format(key_field_full_name, field_full_name,
-                                                                        self.TRACKED_FIELD_NAME),
+                "JOIN (\n  SELECT DISTINCT {0} AS \"id\", {1} AS \"{2}\"".format(key_field_full_name, field_full_name,
+                                                                                 self.TRACKED_FIELD_NAME),
             ]
             parent_table = None
             for table in parent_tables:
@@ -137,12 +137,24 @@ class QueryBuildMixin:
             if self.query_limit is not None:
                 query_str_list.append("  LIMIT {} OFFSET %s".format(self.query_limit))
             query_str_list.append("  ) AS \"{0}\" ON {1} = \"{0}\".\"id\"".format(self.TRACKED_TABLE_NAME,
-                                                                                      key_field_full_name))
+                                                                                  key_field_full_name))
+            root_table = parent_tables[0]
+            if (compare_field_actual_for_child_queries is True and
+                    current_table.compare_field_actual_with_parent_query is not False and
+                    root_table.field_actual_state_name):
+                root_field = self._get_full_field_name(self._get_table_alias(root_table),
+                                                       root_table.field_actual_state_name)
+
+                query_str_list[-1] = " AND ".join([query_str_list[-1], "{} < {}".format(root_field, field_full_name)])
+
             result[field_full_name] = "\n".join(query_str_list)
 
+        if current_table.compare_field_actual_for_child_queries is not None:
+            compare_field_actual_for_child_queries = current_table.compare_field_actual_for_child_queries
         if current_table.children is not None and depth < 2:
             for children_table in current_table.children:
-                child_result = self._get_tracked_fields_with_related_tables(children_table, parent_tables, depth + 1)
+                child_result = self._get_tracked_fields_with_related_tables(children_table, parent_tables, depth + 1,
+                                                                            compare_field_actual_for_child_queries)
                 result.update(child_result)
 
         parent_tables.pop()
@@ -169,33 +181,34 @@ class QueryBuildMixin:
                     'modified', "pn"."modified"
                 )) FILTER (WHERE "pn"."modified" is not null), '[]') AS "persons",
                 "_tracked_table"."_tracked_field"
+            FROM "content"."film_work" AS "fw"
+            LEFT JOIN "content"."genre_film_work" AS "gfw" ON ("fw"."id" = "gfw"."film_work_id")
+            LEFT JOIN "content"."genre" AS "gr" ON ("gfw"."genre_id" = "gr"."id")
+            LEFT JOIN "content"."person_film_work" AS "pfw" ON ("fw"."id" = "pfw"."film_work_id")
+            LEFT JOIN "content"."person" AS "pn" ON ("pfw"."person_id" = "pn"."id")
+            JOIN (
+                SELECT DISTINCT "fw"."id" AS "id", pn.modified AS "_tracked_field"
                 FROM "content"."film_work" AS "fw"
-                LEFT JOIN "content"."genre_film_work" AS "gfw" ON "fw"."id" = "gfw"."film_work_id"
-                LEFT JOIN "content"."genre" AS "gr" ON "gfw"."genre_id" = "gr"."id"
-                LEFT JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
-                LEFT JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
-                JOIN (
-                    SELECT "fw"."id" AS "id", pn.modified AS "_tracked_field"
-                    FROM "content"."film_work" AS "fw"
-                    JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
-                    JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
-                    WHERE pn.modified > %s
-                    ORDER BY pn.modified
-                    LIMIT 10000 OFFSET %s
-                ) AS "_tracked_table" ON ""fw"."id"" = "_tracked_table"."id"
-                GROUP BY
-                    "fw"."id",
-                    "fw"."title",
-                    "fw"."description",
-                    "fw"."rating",
-                    "fw"."modified",
-                    "_tracked_table"."_tracked_field"
-                LIMIT 10000
+                JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
+                JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
+                WHERE pn.modified > %s
+                ORDER BY pn.modified
+                LIMIT 10000 OFFSET %s
+            ) AS "_tracked_table" ON "fw"."id" = "_tracked_table"."id" AND "fw"."modified" < pn.modified
+            GROUP BY
+            "fw"."id",
+            "fw"."title",
+            "fw"."description",
+            "fw"."rating",
+            "fw"."modified",
+            "_tracked_table"."_tracked_field"
+            LIMIT 10000
         """
         fields_and_tables = self._get_fields_and_tables_parts_sql(self.source.table)
         tables = []
         for table in fields_and_tables["tables"]:
-            tables.append(table[0] if table[1] is None else "LEFT JOIN {} ON {}".format(table[0], ", ".join(table[1])))
+            tables.append(table[0] if table[1] is None else "LEFT JOIN {} ON ({})".format(table[0],
+                                                                                          " AND ".join(table[1])))
         tables.extend(adding_join)
         fields = []
         group_by = []
@@ -274,6 +287,7 @@ class PostgresSQLExtract(QueryBuildMixin):
         else:
             execute_params = [tracked_field_state_offset]
 
+        print(sql_text)
         cur = self.conn.cursor(cursor_factory=DictCursor)
         cur.execute(sql_text, execute_params)
         while data := cur.fetchmany(size=self.batch_size):

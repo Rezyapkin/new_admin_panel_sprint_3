@@ -18,6 +18,8 @@ class ExchangeTableSettings(BaseModel):
     field_actual_state_name: str | None = None
     group: str | None = None
     children: List[ExchangeTableSettings] = []
+    compare_field_actual_with_parent_query: bool | None = None
+    compare_field_actual_for_child_queries: bool | None = None
 
 
 ExchangeTableSettings.update_forward_refs()

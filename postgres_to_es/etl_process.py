@@ -16,7 +16,7 @@ from psycopg2 import Error as PgError
 from psycopg2.extensions import connection as pg_connection
 from redis.exceptions import RedisError
 
-import etl_data_transform
+import data_transform
 from config.models import Settings, EtlSettings
 from config import settings
 from db_connection import postgres_db_connection, redis_db_connection, elastic_search_connection
@@ -74,9 +74,9 @@ class ProcessETL:
             return "{}_{}_{}".format(index_name, track_field, postfix)
 
     @staticmethod
-    def _get_data_transform_class(etl: EtlSettings) -> etl_data_transform.DataTransform:
+    def _get_data_transform_class(etl: EtlSettings) -> data_transform.DataTransform:
         """Get a class for transforming data from the application configuration."""
-        return getattr(etl_data_transform, etl.transform_class)
+        return getattr(data_transform, etl.transform_class)
 
     @repeat_request(ConnectionError)
     def repeat_load_data(self, index, data):
@@ -150,6 +150,7 @@ def started_same_process() -> bool:
         But the script can be run with or without specifying the path to it.
         """
         if process.name() == current_process.name() and process.pid != current_process.pid:
+            print(process)
             for cmdline in current_process.cmdline():
                 if cmdline.endswith(script_name):
                     find_same_process = True
@@ -158,7 +159,7 @@ def started_same_process() -> bool:
 
 
 if __name__ == "__main__":
-    if started_same_process():
+    if not started_same_process():
         print("The process has already been started")
     else:
         main()

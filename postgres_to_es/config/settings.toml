@@ -20,12 +20,16 @@ fields = ["id", "title", "description", "rating", "modified"]
 # Aliases for source DB in destanation DB
 aliases.rating = "imdb_rating"
 field_actual_state_name = "modified"
+compare_field_actual_for_child_queries = 1 # Setting to 1 avoids unnecessary data in child queries
 
 [[bindings_elastic_to_sql.table.children]]
 name = "genre_film_work"
 alias = "gfw"
 group = "genre"
 join.film_work_id = "id"
+field_actual_state_name = "created"
+# compare_field_actual_with_parent_query = 1 #  You can force or cancel the comparison with the parent element
+# compare_field_actual_for_child_queries = 0 #  You can change the parent settings for a child elements
 
 [[bindings_elastic_to_sql.table.children.children]]
 name = "genre"
@@ -40,6 +44,7 @@ alias = "pfw"
 group = "persons"
 fields = ["role"]
 join.film_work_id = "id"
+field_actual_state_name = "created"
 
 [[bindings_elastic_to_sql.table.children.children]]
 name = "person"
