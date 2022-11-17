@@ -150,7 +150,6 @@ def started_same_process() -> bool:
         But the script can be run with or without specifying the path to it.
         """
         if process.name() == current_process.name() and process.pid != current_process.pid:
-            print(process)
             for cmdline in current_process.cmdline():
                 if cmdline.endswith(script_name):
                     find_same_process = True
