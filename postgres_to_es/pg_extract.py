@@ -191,10 +191,10 @@ class QueryBuildMixin:
                 FROM "content"."film_work" AS "fw"
                 JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
                 JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
-                WHERE pn.modified > %s
+                WHERE "fw"."modified" < pn.modified AND pn.modified > %s
                 ORDER BY pn.modified
                 LIMIT 10000 OFFSET %s
-            ) AS "_tracked_table" ON "fw"."id" = "_tracked_table"."id" AND "fw"."modified" < pn.modified
+            ) AS "_tracked_table" ON "fw"."id" = "_tracked_table"."id"
             GROUP BY
             "fw"."id",
             "fw"."title",
