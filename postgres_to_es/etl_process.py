@@ -159,7 +159,7 @@ def started_same_process() -> bool:
 
 
 if __name__ == "__main__":
-    if not started_same_process():
+    if started_same_process():
         print("The process has already been started")
     else:
         main()
