@@ -15,7 +15,7 @@ class PostgresSQLExtract(QueryBuildMixin):
                  batch_size: int = 1000):
         self.conn = conn
         self.batch_size = batch_size
-        super(QueryBuildMixin).__init__(self, source, db_settings)
+        QueryBuildMixin.__init__(self, source, db_settings)
         self.tracked_fields = self.get_tracked_fields_with_query()
 
     def _get_query_for_tracked_field(self, tracked_field):

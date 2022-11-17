@@ -22,36 +22,35 @@ class QueryBuildMixin:
         self.default_key_field = "id" if db_settings is None else db_settings.key_field_name
 
     @staticmethod
-    def _get_table_alias(table: ExchangeTableSettings) -> str:
+    def get_table_alias(table: ExchangeTableSettings) -> str:
         return format(table.name if not table.alias else table.alias)
 
     @staticmethod
-    def _get_full_field_name(table_alias: str, field: str, quotes: bool = True) -> str:
+    def get_full_field_name(table_alias: str, field: str, quotes: bool = True) -> str:
         return "\"{0}\".\"{1}\"".format(table_alias, field) if quotes else "{0}.{1}".format(table_alias, field)
 
-    @staticmethod
-    def _get_field_alias(table: ExchangeTableSettings, field: str):
-        table_alias = PostgresSQLExtract._get_table_alias(table)
+    def get_field_alias(self, table: ExchangeTableSettings, field: str):
+        table_alias = self.get_table_alias(table)
         return table.aliases.get(field, "{0}__{1}".format(table_alias, field))
 
-    def _get_full_table_name(self, table: ExchangeTableSettings) -> str:
+    def get_full_table_name(self, table: ExchangeTableSettings) -> str:
         db_schema = table.db_schema if table.db_schema else self.db_schema
         table_name = table.name if not db_schema else "\"{}\".\"{}\"".format(db_schema, table.name)
-        return "{} AS \"{}\"".format(table_name, self._get_table_alias(table))
+        return "{} AS \"{}\"".format(table_name, self.get_table_alias(table))
 
-    def _get_table_with_joins(self, table: ExchangeTableSettings, parent_table: ExchangeTableSettings):
-        table_alias = self._get_table_alias(table)
+    def get_table_with_joins(self, table: ExchangeTableSettings, parent_table: ExchangeTableSettings):
+        table_alias = self.get_table_alias(table)
         joins = None
         if parent_table is not None and len(table.join) > 0:
-            parent_table_alias = self._get_table_alias(parent_table)
+            parent_table_alias = self.get_table_alias(parent_table)
             joins = [
-                "{} = {}".format(self._get_full_field_name(parent_table_alias, value),
-                                 self._get_full_field_name(table_alias, key))
+                "{} = {}".format(self.get_full_field_name(parent_table_alias, value),
+                                 self.get_full_field_name(table_alias, key))
                 for key, value in table.join.items()
             ]
-        return self._get_full_table_name(table), joins
+        return self.get_full_table_name(table), joins
 
-    def _get_table_key_field_name(self, table: ExchangeTableSettings):
+    def get_table_key_field_name(self, table: ExchangeTableSettings):
         return table.key_field_name or self.default_key_field
 
     def _get_fields_and_tables_parts_sql(self, current_table: ExchangeTableSettings,
@@ -61,18 +60,18 @@ class QueryBuildMixin:
             "fields": [],  # [(field, field_full_name, field_alias)]
             "tables": []  # [(table_with_alias, join_on)]
         }
-        table_alias = self._get_table_alias(current_table)
+        table_alias = self.get_table_alias(current_table)
 
         # Adding fields to result
         for field in current_table.fields:
-            field_alias = self._get_field_alias(current_table, field)
+            field_alias = self.get_field_alias(current_table, field)
             if parent_table is None:
                 field_alias = current_table.aliases.get(field, field)
-            field_full_name = self._get_full_field_name(table_alias, field)
+            field_full_name = self.get_full_field_name(table_alias, field)
             result["fields"].append((field, field_full_name, field_alias))
 
         # Adding current table to result
-        result["tables"].append(self._get_table_with_joins(current_table, parent_table))
+        result["tables"].append(self.get_table_with_joins(current_table, parent_table))
 
         # Max depth for children table = 2
         if current_table.children is not None and depth < 2:
@@ -108,12 +107,12 @@ class QueryBuildMixin:
         else:
             parent_tables.append(current_table)
         if current_table.field_actual_state_name:
-            field_full_name = self._get_full_field_name(self._get_table_alias(current_table),
+            field_full_name = self.get_full_field_name(self.get_table_alias(current_table),
                                                         current_table.field_actual_state_name, False)
 
             first_table = parent_tables[0]
-            key_field = self._get_table_key_field_name(first_table)
-            key_field_full_name = self._get_full_field_name(self._get_table_alias(first_table), key_field)
+            key_field = self.get_table_key_field_name(first_table)
+            key_field_full_name = self.get_full_field_name(self.get_table_alias(first_table), key_field)
             query_str_list = [
                 "JOIN (\n  SELECT {0} AS \"id\", MAX({1}) AS \"{2}\"".format(key_field_full_name, field_full_name,
                                                                              self.TRACKED_FIELD_NAME),
@@ -121,7 +120,7 @@ class QueryBuildMixin:
             parent_table = None
             for table in parent_tables:
                 table_str = "  FROM" if parent_table is None else "  JOIN"
-                table_join = self._get_table_with_joins(table, parent_table)
+                table_join = self.get_table_with_joins(table, parent_table)
                 if table_join[1] is not None:
                     query_str_list.append("{0} {1} ON {2}".format(table_str, table_join[0], ", ".join(table_join[1])))
                 else:
@@ -134,7 +133,7 @@ class QueryBuildMixin:
             if (compare_field_actual_for_child_queries is True and
                     current_table.compare_field_actual_with_parent_query is not False and
                     root_table.field_actual_state_name):
-                root_field = self._get_full_field_name(self._get_table_alias(root_table),
+                root_field = self.get_full_field_name(self.get_table_alias(root_table),
                                                        root_table.field_actual_state_name)
                 where_start = "{} < {} AND".format(root_field, field_full_name)
 
