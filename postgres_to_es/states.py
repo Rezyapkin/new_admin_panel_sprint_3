@@ -45,8 +45,10 @@ class State:
     def set_state(self, key: str, value: Any) -> None:
         self.storage.save_state({key: value})
 
-    def get_state(self, key: str) -> Any:
+    def get_state(self, key: str, default: Any | None = None) -> Any:
         value = self.storage.retrieve_state().get(key.encode())
-        if type(value) == bytes:
+        if value is None:
+            value = default
+        elif type(value) == bytes:
             value = value.decode("utf-8")
         return value

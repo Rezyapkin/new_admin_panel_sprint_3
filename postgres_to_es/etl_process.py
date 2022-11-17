@@ -66,7 +66,7 @@ class ProcessETL:
         self.state.set_state(key, value)
 
     @staticmethod
-    def _get_state_name(index_name: str, track_field: str, postfix: str = ""):
+    def get_state_name(index_name: str, track_field: str, postfix: str = ""):
         """Generates the name of the key for the storage."""
         if postfix == "":
             return "{}_{}".format(index_name, track_field)
@@ -74,7 +74,7 @@ class ProcessETL:
             return "{}_{}_{}".format(index_name, track_field, postfix)
 
     @staticmethod
-    def _get_data_transform_class(etl: EtlSettings) -> data_transform.DataTransform:
+    def get_data_transform_class(etl: EtlSettings) -> data_transform.DataTransform:
         """Get a class for transforming data from the application configuration."""
         return getattr(data_transform, etl.transform_class)
 
@@ -95,24 +95,22 @@ class ProcessETL:
         while True:
             etl: EtlSettings = yield
             self.check_and_create_index(etl)
-            transform_class = self._get_data_transform_class(etl)()
+            transform_class = self.get_data_transform_class(etl)()
             pg_loader = PostgresSQLExtract(self.pg_conn, etl, self.settings.etl_settings.sql_db)
             for tracked_field in pg_loader.tracked_fields:
-                tracked_field_state_name = self._get_state_name(etl.elastic_index, tracked_field, "value")
-                offset_state_name = self._get_state_name(etl.elastic_index, tracked_field, "offset")
-
+                tracked_field_state_name = self.get_state_name(etl.elastic_index, tracked_field, "value")
+                offset_state_name = self.get_state_name(etl.elastic_index, tracked_field, "offset")
                 tracked_field_start = self.get_state(tracked_field_state_name)
-
-                offset = self.get_state(offset_state_name)
-                if offset is None:
-                    offset = 0
-
+                offset = self.get_state(offset_state_name, 0)
+                """Getting data from Postgresql. If a Postgre error occurs, we log and reconnect."""
                 while True:
                     try:
                         extracted = pg_loader.extract_data(tracked_field, tracked_field_start, offset)
                         break
                     except PgError as e:
                         logging.log(logging.WARNING, e)
+                        # I don't know if I need to close the connection if the base has already fallen.
+                        # self.pg_conn.close()
                         self.set_pg_conn()
 
                 for data, state_value, state_offset in extracted:
