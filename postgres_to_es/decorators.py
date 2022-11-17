@@ -1,3 +1,6 @@
+"""
+A module with decorators that simplify error logging and reconnections.
+"""
 import logging
 
 from functools import wraps
@@ -6,7 +9,7 @@ from typing import Callable
 
 
 def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: float = 10) -> Callable:
-    '''
+    """
     Функция для повторного выполнения функции через некоторое время, если возникла ошибка.
     Использует наивный экспоненциальный рост времени повтора (factor)
     до граничного времени ожидания (border_sleep_time)
@@ -19,7 +22,7 @@ def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: f
     :param factor: во сколько раз нужно увеличить время ожидания
     :param border_sleep_time: граничное время ожидания
     :return: результат выполнения функции
-    '''
+    """
     def func_wrapper(func: Callable) -> Callable:
         pause = 0
 
@@ -50,15 +53,16 @@ def coroutine(coro):
     return coro_init
 
 
-def repeat_request(exception):
+def repeat_request(*exception):
     def func_wrapper(func: Callable):
         @wraps(func)
         def inner(*args, **kwargs):
-            try:
-                while True:
-                    return func(*args, **kwargs)
-            except exception as e:
-                logging.log(logging.WARNING, e)
+            while True:
+                try:
+                    result = func(*args, **kwargs)
+                    return result
+                except exception as e:
+                    logging.log(logging.WARNING, e)
 
         return inner
 

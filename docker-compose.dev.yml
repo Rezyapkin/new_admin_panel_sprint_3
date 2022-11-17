@@ -41,7 +41,7 @@ services:
   elastic:
     build: ./elasticsearch
     volumes:
-      - data_es:/usr/share/elasticsearch/data:rw
+      - elastic_data:/usr/share/elasticsearch/data:rw
     env_file:
       - ./.env
     depends_on:
@@ -55,14 +55,24 @@ services:
     command: redis-server --save 20 1 --loglevel warning --port $REDIS_PORT --requirepass $REDIS_PASSWORD
     restart: always
     volumes:
-      - data_rds:/data
+      - redis_data:/data
     env_file:
       - ./.env
     ports:
       - ${REDIS_PORT}:${REDIS_PORT}
 
+  etl:
+    build: ./postgres_to_es
+    restart: always
+    env_file:
+      - ./.env
+    depends_on:
+      - db
+      - elastic
+      - redis
+
 volumes:
-  data_es:
-  data_rds:
+  elastic_data:
+  redis_data:
   postgres_data:
   static:

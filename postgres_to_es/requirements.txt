@@ -1,12 +1,18 @@
 black==22.10.0
+certifi==2022.9.24
+elastic-transport==8.4.0
+elasticsearch==8.5.0
 flake8==5.0.4
 psutil==5.9.4
 psycopg2-binary==2.9.4
 pydantic==1.10.2
+python-dotenv==0.21.0
 pyflakes==2.5.0
 redis==4.3.4
 sqlparse==0.4.3
 toml==0.10.2
 tomli==2.0.1
 typing_extensions==4.4.0
+urllib3==1.26.12
+
 

@@ -1,3 +1,8 @@
+"""
+A module that extracts data from Postgresql tables. A very flexible query constructor (albeit confusing)
+that allows you to describe the structure of related tables in a few lines.
+For more information, see the application documentation.
+"""
 from typing import Dict, List, Tuple, Any
 
 from psycopg2.extensions import connection as _connection
@@ -7,8 +12,12 @@ from config.models import ExchangeTableSettings, SQLDBSettings
 
 
 class QueryBuildMixin:
+    """The query construction functionality for the PostgresSQL Extractor placed in a separate class."""
+    # The name of the SQL service subquery used to sort and filter newly modified data
     TRACKED_FIELD_NAME = "_tracked_field"
+    # The name of the service field from the SQL subquery used to sort and filter newly modified data
     TRACKED_TABLE_NAME = "_tracked_table"
+    # The crutch is used to get rid of filtering for the first requests.
     WHERE_COMMENT = "IS NOT NULL /*CHANGE*/"
 
     def __init__(self, source: ExchangeTableSettings, db_settings: SQLDBSettings | None = None):
@@ -94,6 +103,10 @@ class QueryBuildMixin:
     def _get_tracked_fields_with_related_tables(self, current_table: ExchangeTableSettings,
                                                 parent_tables: List[ExchangeTableSettings] | None = None,
                                                 depth=0):
+        """
+        A recursive query that forms a list of fields, tables and relationships between
+        them for further formation of an SQL query
+        """
         result = {}  # tracked_field: [(table_with_alias, join_on), ...]
         if parent_tables is None:
             parent_tables = [current_table]
@@ -139,6 +152,46 @@ class QueryBuildMixin:
         return self._get_tracked_fields_with_related_tables(self.source.table)
 
     def select_query_for_load(self, where_filter: str = "", adding_fields: [str] = [], adding_join: [str] = []) -> str:
+        """
+        Returns an SQL query based on the structure described in self.source.table.
+        Request example:
+            SELECT
+                "fw"."id" AS "id",
+                "fw"."title" AS "title",
+                "fw"."description" AS "description",
+                "fw"."rating" AS "imdb_rating",
+                "fw"."modified" AS "modified",
+                array_agg (DISTINCT "gr"."name") AS "genre",
+                COALESCE (json_agg(DISTINCT jsonb_build_object(
+                    'role', "pfw"."role",
+                    'id', "pn"."id",
+                    'name', "pn"."full_name",
+                    'modified', "pn"."modified"
+                )) FILTER (WHERE "pn"."modified" is not null), '[]') AS "persons",
+                "_tracked_table"."_tracked_field"
+                FROM "content"."film_work" AS "fw"
+                LEFT JOIN "content"."genre_film_work" AS "gfw" ON "fw"."id" = "gfw"."film_work_id"
+                LEFT JOIN "content"."genre" AS "gr" ON "gfw"."genre_id" = "gr"."id"
+                LEFT JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
+                LEFT JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
+                JOIN (
+                    SELECT "fw"."id" AS "id", pn.modified AS "_tracked_field"
+                    FROM "content"."film_work" AS "fw"
+                    JOIN "content"."person_film_work" AS "pfw" ON "fw"."id" = "pfw"."film_work_id"
+                    JOIN "content"."person" AS "pn" ON "pfw"."person_id" = "pn"."id"
+                    WHERE pn.modified > %s
+                    ORDER BY pn.modified
+                    LIMIT 10000 OFFSET %s
+                ) AS "_tracked_table" ON ""fw"."id"" = "_tracked_table"."id"
+                GROUP BY
+                    "fw"."id",
+                    "fw"."title",
+                    "fw"."description",
+                    "fw"."rating",
+                    "fw"."modified",
+                    "_tracked_table"."_tracked_field"
+                LIMIT 10000
+        """
         fields_and_tables = self._get_fields_and_tables_parts_sql(self.source.table)
         tables = []
         for table in fields_and_tables["tables"]:
@@ -196,6 +249,24 @@ class PostgresSQLExtract(QueryBuildMixin):
 
     def extract_data(self, tracked_field: str, tracked_field_state_value: Any,
                      tracked_field_state_offset: int = 0) -> Tuple[list[DictRow], str, str]:
+        """
+        Retrieves data from PostgreSQL.
+
+        Args:
+            tracked_field: The field that is used to track changes.
+                Most often it is modified, updated_at, auto-increment id.
+            tracked_field_state_value: The values of the field above whose records were successfully transferred.
+            tracked_field_state_offset: When changing a child table, it may happen that the data for
+                one modification date affects several tens of thousands of records of the main table.
+                The offset field comes to the rescue, which remembers how many records for the value of
+                the monitored field have already been read.
+
+        Returns:
+            Tuple (A list with data in Dict Row format,
+                   a new value of the monitored field that will need to be saved in case of successful
+                        data transfer to ElasticSearch,
+                   a new offset value)
+        """
         sql_text = self._get_query_for_tracked_field(tracked_field)
         if tracked_field_state_value:
             sql_text = sql_text.replace(self.WHERE_COMMENT, "> %s ")
@@ -204,7 +275,6 @@ class PostgresSQLExtract(QueryBuildMixin):
             execute_params = [tracked_field_state_offset]
 
         cur = self.conn.cursor(cursor_factory=DictCursor)
-        print(sql_text)
         cur.execute(sql_text, execute_params)
         while data := cur.fetchmany(size=self.batch_size):
             if len(data) == 0:

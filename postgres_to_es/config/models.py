@@ -1,3 +1,4 @@
+"""Models loaded from configuration files and environment variables."""
 from typing import Dict, Any, List, ForwardRef
 
 from pydantic import BaseSettings, BaseModel, Field, PostgresDsn, RedisDsn, validator
@@ -42,9 +43,12 @@ class EtlSettings(BaseModel):
 
 
 class Settings(BaseSettings):
+    config_dir: str = ""
     db_timeout: int = 3
     pause_between_repeated_requests: int = 1
     etl_settings: EtlSettings
+    es_host: str
+    es_port: str
     postgres_server: str = Field(..., env="sql_host")
     postgres_user: str = Field(..., env="sql_user")
     postgres_password: str = Field(..., env="sql_password")

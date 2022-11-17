@@ -1,18 +1,22 @@
+"""A module for transforming data from Postgresql to ElasticSearch."""
 from abc import ABC, abstractmethod
 
 from psycopg2.extras import DictRow
-from pydantic import BaseModel
 
-from models import FilmWork, PersonRoles, Person
+from models import FilmWork, PersonRoles, Person, ElasticModel
 
 
 class DataTransform(ABC):
     @abstractmethod
-    def transform(self, data: list[DictRow]) -> BaseModel:
+    def transform(self, data: list[DictRow]) -> ElasticModel:
         pass
 
 
 class MoviesDataTransform(DataTransform):
+    """
+    The flexible configuration of PostgresSQLExtract allows you to write a minimum of code in the
+    MoviesDataTransform class, designed to transform data from DictRow into a Pydantic model.
+    """
     @staticmethod
     def _fill_role_persons(record: DictRow, record_transform: FilmWork):
         role_filters = {
