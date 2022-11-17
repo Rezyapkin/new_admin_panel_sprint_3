@@ -10,20 +10,18 @@ from pathlib import Path
 from typing import Generator, Any
 from json import load
 
-from psutil import process_iter, Process
-from elasticsearch import ConnectionError, RequestError
+from elasticsearch import ConnectionError
 from psycopg2 import Error as PgError
 from psycopg2.extensions import connection as pg_connection
 from redis.exceptions import RedisError
 
 import data_transform
 from config.models import Settings, EtlSettings
-from config import settings
-from db_connection import postgres_db_connection, redis_db_connection, elastic_search_connection
+from db_connection import postgres_db_connection
 from decorators import coroutine, repeat_request, backoff
 from es_load import MoviesESLoad
 from pg_extract import PostgresSQLExtract
-from states import State, RedisStorage
+from states import State
 
 
 class ProcessETL:
@@ -130,35 +128,3 @@ class ProcessETL:
             for etl in self.settings.etl_settings.bindings_elastic_to_sql:
                 self.extract_data().send(etl)
 
-
-def main() -> None:
-    redis_adapter = redis_db_connection(settings.redis_host, settings.redis_port, settings.redis_etl_db,
-                                        settings.redis_password, connect_timeout=settings.db_timeout)
-    elastic_adapter = elastic_search_connection(settings.es_host, settings.es_port, settings.db_timeout)
-    ProcessETL(settings, State(RedisStorage(redis_adapter)), MoviesESLoad(elastic_adapter)).start()
-
-
-# Check running same process.
-def started_same_process() -> bool:
-    """Checks if a python script with the same name is running."""
-    current_process = Process()
-    script_name = Path(__file__).name
-    find_same_process = False
-    for process in process_iter(["pid", "name", "cmdline"]):
-        """
-        Of course, it was possible to simply compare the cmdline of the process and current_process.
-        But the script can be run with or without specifying the path to it.
-        """
-        if process.name() == current_process.name() and process.pid != current_process.pid:
-            for cmdline in current_process.cmdline():
-                if cmdline.endswith(script_name):
-                    find_same_process = True
-                    break
-    return find_same_process
-
-
-if __name__ == "__main__":
-    if started_same_process():
-        print("The process has already been started")
-    else:
-        main()

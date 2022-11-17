@@ -15,4 +15,4 @@ RUN chown user:user -R /etl
 
 USER user
 
-ENTRYPOINT ["python3", "/etl/etl_process.py"]
+ENTRYPOINT ["python3", "/etl/app.py"]
