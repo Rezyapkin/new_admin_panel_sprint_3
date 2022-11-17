@@ -49,11 +49,13 @@ class ProcessETL:
                 elastic_conn.indices.create(index=etl.elastic_index, **data)
 
     @repeat_request(PgError)
+    @backoff()
     def set_pg_conn(self):
         """The connection to postgresql is managed inside the class."""
         self.pg_conn = postgres_db_connection(self.settings.postgres_dsn, self.settings.db_timeout)
 
     @repeat_request(RedisError)
+    @backoff()
     def get_state(self, key, default: Any | None = None) -> Any:
         """Retrieves the state from the storage."""
         return self.state.get_state(key, default)

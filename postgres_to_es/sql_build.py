@@ -56,6 +56,10 @@ class QueryBuildMixin:
     def _get_fields_and_tables_parts_sql(self, current_table: ExchangeTableSettings,
                                          parent_table: ExchangeTableSettings | None = None,
                                          depth=0) -> dict[str, list | tuple]:
+        """
+        The method returns a data structure containing fields and tables.
+        Based on this structure, an SQL query will be built.
+        """
         result = {
             "fields": [],  # [(field, field_full_name, field_alias)]
             "tables": []  # [(table_with_alias, join_on)]

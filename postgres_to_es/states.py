@@ -2,17 +2,16 @@ import abc
 from typing import Any
 from redis import Redis
 
-from decorators import backoff
 
 class BaseStorage:
     @abc.abstractmethod
     def save_state(self, state: dict) -> None:
-        """Сохранить состояние в постоянное хранилище"""
+        """Save state to persistent storage."""
         pass
 
     @abc.abstractmethod
     def retrieve_state(self) -> dict:
-        """Загрузить состояние локально из постоянного хранилища"""
+        """Load state locally from persistent storage."""
         pass
 
 
@@ -23,20 +22,18 @@ class RedisStorage(BaseStorage):
         self.redis_adapter = redis_adapter
         self.storage_name = storage_name
 
-    @backoff()
     def save_state(self, state: dict) -> None:
         self.redis_adapter.hset(self.storage_name, mapping=state)
 
-    @backoff()
     def retrieve_state(self) -> dict:
         return self.redis_adapter.hgetall(self.storage_name)
 
 
 class State:
     """
-    Класс для хранения состояния при работе с данными, чтобы постоянно не перечитывать данные с начала.
-    Здесь представлена реализация с сохранением состояния в файл.
-    В целом ничего не мешает поменять это поведение на работу с БД или распределённым хранилищем.
+    A class for storing the state when working with data, so as not to constantly re-read the data from the beginning.
+    Here is an implementation with saving the state to a file.
+    In general, nothing prevents you from changing this behavior to work with a database or distributed storage.
     """
 
     def __init__(self, storage: BaseStorage):
