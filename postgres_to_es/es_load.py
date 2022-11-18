@@ -1,11 +1,10 @@
 """A module for batch uploading Pydantic documents to ElasticSearch."""
 from abc import abstractmethod
-from typing import Tuple, Union, List, Dict, Any
+from typing import Any
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
-from decorators import backoff
 from models import FilmWork, ElasticModel
 
 
@@ -26,6 +25,5 @@ class ElasticLoad:
 
 
 class MoviesESLoad(ElasticLoad):
-    @backoff()
-    def load(self, data: list[FilmWork], index: str) -> Tuple[int, Union[int, List[Dict[str, Any]]]]:
+    def load(self, data: list[FilmWork], index: str) -> tuple[int, int, list[dict[str, Any]]]:
         return bulk(self.es, self._get_data_for_elastic(data), index=index)

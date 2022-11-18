@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from psutil import process_iter, Process
 
@@ -22,10 +23,6 @@ def started_same_process() -> bool:
     script_name = Path(__file__).name
     find_same_process = False
     for process in process_iter(["pid", "name", "cmdline"]):
-        """
-        Of course, it was possible to simply compare the cmdline of the process and current_process.
-        But the script can be run with or without specifying the path to it.
-        """
         if process.name() == current_process.name() and process.pid != current_process.pid:
             for cmdline in current_process.cmdline():
                 if cmdline.endswith(script_name):
@@ -36,6 +33,6 @@ def started_same_process() -> bool:
 
 if __name__ == "__main__":
     if started_same_process():
-        print("The process has already been started")
+        logging.log(logging.WARNING, "The process has already been started")
     else:
         main()

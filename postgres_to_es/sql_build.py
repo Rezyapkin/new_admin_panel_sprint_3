@@ -8,6 +8,7 @@ from config.models import ExchangeTableSettings, SQLDBSettings
 
 class QueryBuildMixin:
     """The query construction functionality for the PostgresSQL Extractor placed in a separate class."""
+
     # The name of the SQL service subquery used to sort and filter newly modified data
     TRACKED_FIELD_NAME = "_tracked_field"
     # The name of the service field from the SQL subquery used to sort and filter newly modified data
@@ -15,11 +16,17 @@ class QueryBuildMixin:
     # The crutch is used to get rid of filtering for the first requests.
     WHERE_COMMENT = "IS NOT NULL /*CHANGE*/"
 
-    def __init__(self, source: ExchangeTableSettings, db_settings: SQLDBSettings | None = None):
+    def __init__(
+        self, source: ExchangeTableSettings, db_settings: SQLDBSettings | None = None
+    ):
         self.source = source
         self.db_schema = "" if db_settings is None else db_settings.db_schema
-        self.query_limit = None if db_settings is None else db_settings.query_entries_limit
-        self.default_key_field = "id" if db_settings is None else db_settings.key_field_name
+        self.query_limit = (
+            None if db_settings is None else db_settings.query_entries_limit
+        )
+        self.default_key_field = (
+            "id" if db_settings is None else db_settings.key_field_name
+        )
 
     @staticmethod
     def get_table_alias(table: ExchangeTableSettings) -> str:
@@ -27,7 +34,11 @@ class QueryBuildMixin:
 
     @staticmethod
     def get_full_field_name(table_alias: str, field: str, quotes: bool = True) -> str:
-        return "\"{0}\".\"{1}\"".format(table_alias, field) if quotes else "{0}.{1}".format(table_alias, field)
+        return (
+            '"{0}"."{1}"'.format(table_alias, field)
+            if quotes
+            else "{0}.{1}".format(table_alias, field)
+        )
 
     def get_field_alias(self, table: ExchangeTableSettings, field: str):
         table_alias = self.get_table_alias(table)
@@ -35,17 +46,23 @@ class QueryBuildMixin:
 
     def get_full_table_name(self, table: ExchangeTableSettings) -> str:
         db_schema = table.db_schema if table.db_schema else self.db_schema
-        table_name = table.name if not db_schema else "\"{}\".\"{}\"".format(db_schema, table.name)
-        return "{} AS \"{}\"".format(table_name, self.get_table_alias(table))
+        table_name = (
+            table.name if not db_schema else '"{}"."{}"'.format(db_schema, table.name)
+        )
+        return '{} AS "{}"'.format(table_name, self.get_table_alias(table))
 
-    def get_table_with_joins(self, table: ExchangeTableSettings, parent_table: ExchangeTableSettings):
+    def get_table_with_joins(
+        self, table: ExchangeTableSettings, parent_table: ExchangeTableSettings
+    ):
         table_alias = self.get_table_alias(table)
         joins = None
         if parent_table is not None and len(table.join) > 0:
             parent_table_alias = self.get_table_alias(parent_table)
             joins = [
-                "{} = {}".format(self.get_full_field_name(parent_table_alias, value),
-                                 self.get_full_field_name(table_alias, key))
+                "{} = {}".format(
+                    self.get_full_field_name(parent_table_alias, value),
+                    self.get_full_field_name(table_alias, key),
+                )
                 for key, value in table.join.items()
             ]
         return self.get_full_table_name(table), joins
@@ -53,16 +70,19 @@ class QueryBuildMixin:
     def get_table_key_field_name(self, table: ExchangeTableSettings):
         return table.key_field_name or self.default_key_field
 
-    def _get_fields_and_tables_parts_sql(self, current_table: ExchangeTableSettings,
-                                         parent_table: ExchangeTableSettings | None = None,
-                                         depth=0) -> dict[str, list | tuple]:
+    def _get_fields_and_tables_parts_sql(
+        self,
+        current_table: ExchangeTableSettings,
+        parent_table: ExchangeTableSettings | None = None,
+        depth=0,
+    ) -> dict[str, list | tuple]:
         """
         The method returns a data structure containing fields and tables.
         Based on this structure, an SQL query will be built.
         """
         result = {
             "fields": [],  # [(field, field_full_name, field_alias)]
-            "tables": []  # [(table_with_alias, join_on)]
+            "tables": [],  # [(table_with_alias, join_on)]
         }
         table_alias = self.get_table_alias(current_table)
 
@@ -80,7 +100,9 @@ class QueryBuildMixin:
         # Max depth for children table = 2
         if current_table.children is not None and depth < 2:
             for children_table in current_table.children:
-                children_result = self._get_fields_and_tables_parts_sql(children_table, current_table, depth + 1)
+                children_result = self._get_fields_and_tables_parts_sql(
+                    children_table, current_table, depth + 1
+                )
                 for key, value in children_result.items():
                     result[key] += value
 
@@ -91,16 +113,30 @@ class QueryBuildMixin:
                 agg = "array_agg (DISTINCT {})".format(field[1])
                 result["fields"][0] = (None, agg, current_table.group)
             elif len(result["fields"]) > 1:
-                fields = ", \n".join(["  '{}', {}".format(field[0] if "__" in field[2] else field[2], field[1])
-                                      for field in result["fields"]])
-                agg = "COALESCE (json_agg(DISTINCT jsonb_build_object(\n{}\n))" \
-                      " FILTER (WHERE {} is not null), '[]')".format(fields, result["fields"][-1][1])
+                fields = ", \n".join(
+                    [
+                        "  '{}', {}".format(
+                            field[0] if "__" in field[2] else field[2], field[1]
+                        )
+                        for field in result["fields"]
+                    ]
+                )
+                agg = (
+                    "COALESCE (json_agg(DISTINCT jsonb_build_object(\n{}\n))"
+                    " FILTER (WHERE {} is not null), '[]')".format(
+                        fields, result["fields"][-1][1]
+                    )
+                )
                 result["fields"] = [(None, agg, current_table.group)]
         return result
 
-    def _get_tracked_fields_with_related_tables(self, current_table: ExchangeTableSettings,
-                                                parent_tables: list[ExchangeTableSettings] | None = None,
-                                                depth=0, compare_field_actual_for_child_queries: bool | None = None):
+    def _get_tracked_fields_with_related_tables(
+        self,
+        current_table: ExchangeTableSettings,
+        parent_tables: list[ExchangeTableSettings] | None = None,
+        depth=0,
+        compare_field_actual_for_child_queries: bool | None = None,
+    ):
         """
         A recursive query that forms a list of fields, tables and relationships between
         them for further formation of an SQL query
@@ -111,22 +147,32 @@ class QueryBuildMixin:
         else:
             parent_tables.append(current_table)
         if current_table.field_actual_state_name:
-            field_full_name = self.get_full_field_name(self.get_table_alias(current_table),
-                                                        current_table.field_actual_state_name, False)
+            field_full_name = self.get_full_field_name(
+                self.get_table_alias(current_table),
+                current_table.field_actual_state_name,
+                False,
+            )
 
             first_table = parent_tables[0]
             key_field = self.get_table_key_field_name(first_table)
-            key_field_full_name = self.get_full_field_name(self.get_table_alias(first_table), key_field)
+            key_field_full_name = self.get_full_field_name(
+                self.get_table_alias(first_table), key_field
+            )
             query_str_list = [
-                "JOIN (\n  SELECT {0} AS \"id\", MAX({1}) AS \"{2}\"".format(key_field_full_name, field_full_name,
-                                                                             self.TRACKED_FIELD_NAME),
+                'JOIN (\n  SELECT {0} AS "id", MAX({1}) AS "{2}"'.format(
+                    key_field_full_name, field_full_name, self.TRACKED_FIELD_NAME
+                ),
             ]
             parent_table = None
             for table in parent_tables:
                 table_str = "  FROM" if parent_table is None else "  JOIN"
                 table_join = self.get_table_with_joins(table, parent_table)
                 if table_join[1] is not None:
-                    query_str_list.append("{0} {1} ON {2}".format(table_str, table_join[0], ", ".join(table_join[1])))
+                    query_str_list.append(
+                        "{0} {1} ON {2}".format(
+                            table_str, table_join[0], ", ".join(table_join[1])
+                        )
+                    )
                 else:
                     query_str_list.append("{0} {1}".format(table_str, table_join[0]))
                 parent_table = table
@@ -134,29 +180,47 @@ class QueryBuildMixin:
             # A block that adds filtering of records in the child table if necessary.
             root_table = parent_tables[0]
             where_start = ""
-            if (compare_field_actual_for_child_queries is True and
-                    current_table.compare_field_actual_with_parent_query is not False and
-                    root_table.field_actual_state_name):
-                root_field = self.get_full_field_name(self.get_table_alias(root_table),
-                                                       root_table.field_actual_state_name)
+            if (
+                compare_field_actual_for_child_queries is True
+                and current_table.compare_field_actual_with_parent_query is not False
+                and root_table.field_actual_state_name
+            ):
+                root_field = self.get_full_field_name(
+                    self.get_table_alias(root_table), root_table.field_actual_state_name
+                )
                 where_start = "{} < {} AND".format(root_field, field_full_name)
 
-            query_str_list.append("  WHERE {0} {1} {2}\n  GROUP BY {3}\n  ORDER BY {4}".
-                                  format(where_start, field_full_name, self.WHERE_COMMENT,
-                                         key_field_full_name, self.TRACKED_FIELD_NAME))
+            query_str_list.append(
+                "  WHERE {0} {1} {2}\n  GROUP BY {3}\n  ORDER BY {4}".format(
+                    where_start,
+                    field_full_name,
+                    self.WHERE_COMMENT,
+                    key_field_full_name,
+                    self.TRACKED_FIELD_NAME,
+                )
+            )
             if self.query_limit is not None:
                 query_str_list.append("  LIMIT {} OFFSET %s".format(self.query_limit))
-            query_str_list.append("  ) AS \"{0}\" ON {1} = \"{0}\".\"id\"".format(self.TRACKED_TABLE_NAME,
-                                                                                  key_field_full_name))
+            query_str_list.append(
+                '  ) AS "{0}" ON {1} = "{0}"."id"'.format(
+                    self.TRACKED_TABLE_NAME, key_field_full_name
+                )
+            )
 
             result[field_full_name] = "\n".join(query_str_list)
 
         if current_table.compare_field_actual_for_child_queries is not None:
-            compare_field_actual_for_child_queries = current_table.compare_field_actual_for_child_queries
+            compare_field_actual_for_child_queries = (
+                current_table.compare_field_actual_for_child_queries
+            )
         if current_table.children is not None and depth < 2:
             for children_table in current_table.children:
-                child_result = self._get_tracked_fields_with_related_tables(children_table, parent_tables, depth + 1,
-                                                                            compare_field_actual_for_child_queries)
+                child_result = self._get_tracked_fields_with_related_tables(
+                    children_table,
+                    parent_tables,
+                    depth + 1,
+                    compare_field_actual_for_child_queries,
+                )
                 result.update(child_result)
 
         parent_tables.pop()
@@ -165,7 +229,9 @@ class QueryBuildMixin:
     def get_tracked_fields_with_query(self):
         return self._get_tracked_fields_with_related_tables(self.source.table)
 
-    def select_query_for_load(self, where_filter: str = "", adding_fields: [str] = [], adding_join: [str] = []) -> str:
+    def select_query_for_load(
+        self, where_filter: str = "", adding_fields: [str] = [], adding_join: [str] = []
+    ) -> str:
         """
         Returns an SQL query based on the structure described in self.source.table.
         Request example:
@@ -210,8 +276,11 @@ class QueryBuildMixin:
         fields_and_tables = self._get_fields_and_tables_parts_sql(self.source.table)
         tables = []
         for table in fields_and_tables["tables"]:
-            tables.append(table[0] if table[1] is None else "LEFT JOIN {} ON ({})".format(table[0],
-                                                                                          " AND ".join(table[1])))
+            tables.append(
+                table[0]
+                if table[1] is None
+                else "LEFT JOIN {} ON ({})".format(table[0], " AND ".join(table[1]))
+            )
         tables.extend(adding_join)
         fields = []
         group_by = []
@@ -221,7 +290,7 @@ class QueryBuildMixin:
                 group_by.append(field[1])
             else:
                 group_by_need = True
-            fields.append("{} AS \"{}\"".format(field[1], field[2]))
+            fields.append('{} AS "{}"'.format(field[1], field[2]))
         fields.extend(adding_fields)
         group_by.extend(adding_fields)
         fields_str = ",\n ".join(fields)
@@ -230,7 +299,9 @@ class QueryBuildMixin:
         if group_by_need:
             group_by_str = "GROUP BY\n {}".format(",\n ".join(group_by))
         where_str = "" if where_filter == "" else "\nWHERE {}".format(where_filter)
-        sql_text = "SELECT \n {0} \nFROM {1} {2}\n{3}\n".format(fields_str, tables_str, where_str, group_by_str)
+        sql_text = "SELECT \n {0} \nFROM {1} {2}\n{3}\n".format(
+            fields_str, tables_str, where_str, group_by_str
+        )
 
         if self.query_limit is not None:
             sql_text += "LIMIT {}".format(self.query_limit)

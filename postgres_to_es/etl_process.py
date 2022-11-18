@@ -1,6 +1,5 @@
 """
 ETL-script for loads data from postgres to elastic search.
-!!! Уважаемый ревьюер, большая просьба прочесть файл документации. Мне кажется я запутанный код написал(((
 """
 
 import logging
@@ -18,7 +17,7 @@ from redis.exceptions import RedisError
 import data_transform
 from config.models import Settings, EtlSettings
 from db_connection import postgres_db_connection
-from decorators import coroutine, repeat_request, backoff
+from decorators import coroutine, backoff
 from es_load import MoviesESLoad
 from pg_extract import PostgresSQLExtract
 from states import State
@@ -36,7 +35,6 @@ class ProcessETL:
         self.elastic_loader = elastic_loader
         self.set_pg_conn()
 
-    @repeat_request(ConnectionError)
     @backoff()
     def check_and_create_index(self, etl: EtlSettings):
         """If the ElasticSearch index does not exist, create it from a json file."""
@@ -46,19 +44,16 @@ class ProcessETL:
                 data = load(fp)
                 elastic_conn.indices.create(index=etl.elastic_index, **data)
 
-    @repeat_request(PgError)
     @backoff()
     def set_pg_conn(self):
         """The connection to postgresql is managed inside the class."""
         self.pg_conn = postgres_db_connection(self.settings.postgres_dsn, self.settings.db_timeout)
 
-    @repeat_request(RedisError)
     @backoff()
     def get_state(self, key, default: Any | None = None) -> Any:
         """Retrieves the state from the storage."""
         return self.state.get_state(key, default)
 
-    @repeat_request(RedisError)
     def set_state(self, key, value) -> None:
         """Set the state from the storage."""
         if isinstance(value, datetime):
@@ -70,15 +65,14 @@ class ProcessETL:
         """Generates the name of the key for the storage."""
         if postfix == "":
             return "{}_{}".format(index_name, track_field)
-        else:
-            return "{}_{}_{}".format(index_name, track_field, postfix)
+        return "{}_{}_{}".format(index_name, track_field, postfix)
 
     @staticmethod
     def get_data_transform_class(etl: EtlSettings) -> data_transform.DataTransform:
         """Get a class for transforming data from the application configuration."""
         return getattr(data_transform, etl.transform_class)
 
-    @repeat_request(ConnectionError)
+    @backoff()
     def repeat_load_data(self, index, data):
         self.elastic_loader.load(data, index)
 
@@ -92,8 +86,7 @@ class ProcessETL:
     @coroutine
     def extract_data(self) -> Generator[None, EtlSettings, None]:
         """A coroutine that extracting data from PostgresSQL."""
-        while True:
-            etl: EtlSettings = yield
+        while etl := (yield):
             self.check_and_create_index(etl)
             transform_class = self.get_data_transform_class(etl)()
             pg_loader = PostgresSQLExtract(self.pg_conn, etl, self.settings.etl_settings.sql_db)

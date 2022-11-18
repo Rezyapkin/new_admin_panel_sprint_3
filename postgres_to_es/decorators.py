@@ -8,7 +8,8 @@ from time import sleep
 from typing import Callable
 
 
-def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: float = 10) -> Callable:
+def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: float = 10,
+            logger: Callable = logging.exception) -> Callable:
     """
     Функция для повторного выполнения функции через некоторое время, если возникла ошибка.
     Использует наивный экспоненциальный рост времени повтора (factor)
@@ -24,20 +25,20 @@ def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: f
     :return: результат выполнения функции
     """
     def func_wrapper(func: Callable) -> Callable:
-        pause = 0
 
         @wraps(func)
         def inner(*args, **kwargs):
-            nonlocal pause
-            if pause > 0:
+            pause = start_sleep_time
+            while True:
+                try:
+                    result = func(*args, **kwargs)
+                    return result
+                except Exception as e:
+                    logger(e)
+
                 sleep(pause)
                 pause *= factor
                 pause = border_sleep_time if pause > border_sleep_time else pause
-            else:
-                pause = start_sleep_time
-            result = func(*args, **kwargs)
-            pause = 0
-            return result
 
         return inner
 
@@ -51,19 +52,3 @@ def coroutine(coro):
         next(fn)
         return fn
     return coro_init
-
-
-def repeat_request(*exception):
-    def func_wrapper(func: Callable):
-        @wraps(func)
-        def inner(*args, **kwargs):
-            while True:
-                try:
-                    result = func(*args, **kwargs)
-                    return result
-                except exception as e:
-                    logging.log(logging.WARNING, e)
-
-        return inner
-
-    return func_wrapper

@@ -18,7 +18,7 @@ class MoviesDataTransform(DataTransform):
     MoviesDataTransform class, designed to transform data from DictRow into a Pydantic model.
     """
     @staticmethod
-    def _fill_role_persons(record: DictRow, record_transform: FilmWork):
+    def fill_role_persons(record: DictRow, record_transform: FilmWork):
         role_filters = {
             PersonRoles.director: "director",
             PersonRoles.actor: "actors_names",
@@ -34,6 +34,6 @@ class MoviesDataTransform(DataTransform):
         data_transform = []
         for record in data:
             record_transform = FilmWork.parse_obj(record)
-            self._fill_role_persons(record, record_transform)
+            self.fill_role_persons(record, record_transform)
             data_transform.append(record_transform)
         return data_transform

@@ -1,7 +1,7 @@
 """Models loaded from configuration files and environment variables."""
-from typing import Dict, Any, List, ForwardRef
+from typing import Any, ForwardRef
 
-from pydantic import BaseSettings, BaseModel, Field, PostgresDsn, RedisDsn, validator
+from pydantic import BaseSettings, BaseModel, Field, PostgresDsn, validator
 
 
 ExchangeTableSettings = ForwardRef("ExchangeTableSettings")
@@ -12,12 +12,12 @@ class ExchangeTableSettings(BaseModel):
     name: str
     alias: str = ""
     key_field_name: str = ""
-    fields: List[str] = []
-    aliases: Dict[str, str] = {}
-    join: Dict[str, str] = {}
+    fields: list[str] = []
+    aliases: dict[str, str] = {}
+    join: dict[str, str] = {}
     field_actual_state_name: str | None = None
     group: str | None = None
-    children: List[ExchangeTableSettings] = []
+    children: list[ExchangeTableSettings] = []
     compare_field_actual_with_parent_query: bool | None = None
     compare_field_actual_for_child_queries: bool | None = None
 
@@ -41,7 +41,7 @@ class EtlExchangeSettings(BaseModel):
 class EtlSettings(BaseModel):
     etl_batch_size: int
     sql_db: SQLDBSettings
-    bindings_elastic_to_sql: List[EtlExchangeSettings]
+    bindings_elastic_to_sql: list[EtlExchangeSettings]
 
 
 class Settings(BaseSettings):
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     redis_password: str
 
     @validator("postgres_dsn", pre=True)
-    def assemble_db_connection(cls, v: str | None, values: Dict[str, Any]) -> Any:
+    def assemble_db_connection(cls, v: str | None, values: dict[str, Any]) -> Any:
         if isinstance(v, str):
             return v
         return PostgresDsn.build(

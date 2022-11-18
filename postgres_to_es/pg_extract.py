@@ -62,7 +62,6 @@ class PostgresSQLExtract(QueryBuildMixin):
         else:
             execute_params = [tracked_field_state_offset]
 
-        # print(sql_text)
         cur = self.conn.cursor(cursor_factory=DictCursor)
         cur.execute(sql_text, execute_params)
         while data := cur.fetchmany(size=self.batch_size):
