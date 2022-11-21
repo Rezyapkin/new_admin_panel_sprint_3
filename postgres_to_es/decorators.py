@@ -8,8 +8,11 @@ from time import sleep
 from typing import Callable
 
 
+logger = logging.getLogger(__name__)
+
+
 def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: float = 10,
-            logger: Callable = logging.exception) -> Callable:
+            logger: logging.Logger = logger) -> Callable:
     """
     Функция для повторного выполнения функции через некоторое время, если возникла ошибка.
     Использует наивный экспоненциальный рост времени повтора (factor)
@@ -22,6 +25,7 @@ def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: f
     :param start_sleep_time: начальное время повтора
     :param factor: во сколько раз нужно увеличить время ожидания
     :param border_sleep_time: граничное время ожидания
+    :param logger: логгер с помощью, которого выполняется логгирование
     :return: результат выполнения функции
     """
     def func_wrapper(func: Callable) -> Callable:
@@ -34,7 +38,7 @@ def backoff(start_sleep_time: float = 0.1, factor: int = 2, border_sleep_time: f
                     result = func(*args, **kwargs)
                     return result
                 except Exception as e:
-                    logger(e)
+                    logger.exception(e)
 
                 sleep(pause)
                 pause *= factor

@@ -9,10 +9,8 @@ from pathlib import Path
 from typing import Generator, Any
 from json import load
 
-from elasticsearch import ConnectionError
 from psycopg2 import Error as PgError
 from psycopg2.extensions import connection as pg_connection
-from redis.exceptions import RedisError
 
 import data_transform
 from config.models import Settings, EtlSettings
@@ -21,6 +19,9 @@ from decorators import coroutine, backoff
 from es_load import MoviesESLoad
 from pg_extract import PostgresSQLExtract
 from states import State
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProcessETL:
@@ -35,7 +36,11 @@ class ProcessETL:
         self.elastic_loader = elastic_loader
         self.set_pg_conn()
 
-    @backoff()
+    def __del__(self):
+        if self.pg_conn is not None and not self.pg_conn.closed:
+            self.pg_conn.close()
+
+    @backoff(logger=logger)
     def check_and_create_index(self, etl: EtlSettings):
         """If the ElasticSearch index does not exist, create it from a json file."""
         elastic_conn = self.elastic_loader.get_elastic()
@@ -44,13 +49,13 @@ class ProcessETL:
                 data = load(fp)
                 elastic_conn.indices.create(index=etl.elastic_index, **data)
 
-    @backoff()
+    @backoff(logger=logger)
     def set_pg_conn(self):
         """The connection to postgresql is managed inside the class."""
         if self.pg_conn is None or self.pg_conn.closed:
             self.pg_conn = postgres_db_connection(self.settings.postgres_dsn, self.settings.db_timeout)
 
-    @backoff()
+    @backoff(logger=logger)
     def get_state(self, key, default: Any | None = None) -> Any:
         """Retrieves the state from the storage."""
         return self.state.get_state(key, default)
@@ -73,7 +78,7 @@ class ProcessETL:
         """Get a class for transforming data from the application configuration."""
         return getattr(data_transform, etl.transform_class)
 
-    @backoff()
+    @backoff(logger=logger)
     def repeat_load_data(self, index, data):
         self.elastic_loader.load(data, index)
 
@@ -99,10 +104,11 @@ class ProcessETL:
                 """Getting data from Postgresql. If a Postgre error occurs, we log and reconnect."""
                 while True:
                     try:
+                        logger.info("Extract data for field {}.".format(tracked_field))
                         extracted = pg_loader.extract_data(tracked_field, tracked_field_start, offset)
                         break
                     except PgError as e:
-                        logging.log(logging.WARNING, e)
+                        logger.exception(e)
                         # I don't know if I need to close the connection if the base has already fallen.
                         # self.pg_conn.close()
                         self.set_pg_conn()
@@ -113,7 +119,7 @@ class ProcessETL:
                     self.set_state(tracked_field_state_name, state_value)
                     self.set_state(offset_state_name, state_offset)
 
-            logging.log(logging.INFO, "Check all tables. Paused.")
+            logger.info("Check all tables. Paused {} s.".format(self.settings.pause_between_repeated_requests))
             sleep(self.settings.pause_between_repeated_requests)
 
     def start(self):
