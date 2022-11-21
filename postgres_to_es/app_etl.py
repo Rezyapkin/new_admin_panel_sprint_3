@@ -1,4 +1,5 @@
 import logging
+from contextlib import closing
 from pathlib import Path
 from psutil import process_iter, Process
 
@@ -10,10 +11,11 @@ from states import State, RedisStorage
 
 
 def main() -> None:
-    redis_adapter = redis_db_connection(settings.redis_host, settings.redis_port, settings.redis_etl_db,
-                                        settings.redis_password, connect_timeout=settings.db_timeout)
-    elastic_adapter = elastic_search_connection(settings.es_host, settings.es_port, settings.db_timeout)
-    ProcessETL(settings, State(RedisStorage(redis_adapter)), MoviesESLoad(elastic_adapter)).start()
+    with (closing(redis_db_connection(settings.redis_host, settings.redis_port, settings.redis_etl_db,
+                                      settings.redis_password, connect_timeout=settings.db_timeout)) as redis_adapter,
+          closing(elastic_search_connection(settings.es_host, settings.es_port, settings.db_timeout))
+          as elastic_adapter):
+        ProcessETL(settings, State(RedisStorage(redis_adapter)), MoviesESLoad(elastic_adapter)).start()
 
 
 # Check running same process.

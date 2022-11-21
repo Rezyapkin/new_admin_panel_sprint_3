@@ -47,7 +47,8 @@ class ProcessETL:
     @backoff()
     def set_pg_conn(self):
         """The connection to postgresql is managed inside the class."""
-        self.pg_conn = postgres_db_connection(self.settings.postgres_dsn, self.settings.db_timeout)
+        if self.pg_conn is None or self.pg_conn.closed:
+            self.pg_conn = postgres_db_connection(self.settings.postgres_dsn, self.settings.db_timeout)
 
     @backoff()
     def get_state(self, key, default: Any | None = None) -> Any:
